@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>MP4 Part A — Four-Bar Linkage Starter</title>
+<style>
+  body { margin: 0; padding: 16px; font-family: system-ui, sans-serif; background: #111; color: #ddd; }
+  h1 { font-size: 18px; margin: 0 0 4px; color: #fff; }
+  p  { font-size: 13px; margin: 4px 0 12px; }
+  .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  canvas { background: #1d1d1d; border: 1px solid #333; }
+  .panel { font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.55; min-width: 320px; }
+  .panel h2 { font-size: 12px; margin: 0 0 6px; color: #fff; text-transform: uppercase; letter-spacing: 1px; }
+  fieldset { border: 1px solid #333; padding: 10px 12px 12px; margin: 0 0 10px; }
+  legend  { padding: 0 6px; color: #aaa; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  label { display: block; margin: 4px 0 2px; font-size: 11px; color: #999; }
+  input[type="number"] { width: 80px; background: #222; color: #ddd; border: 1px solid #444; padding: 3px 5px; font-family: ui-monospace, monospace; font-size: 12px; }
+  input[type="range"]  { width: 240px; }
+  button  { background: #244; color: #fff; border: 1px solid #466; padding: 4px 12px; cursor: pointer; font-family: inherit; }
+  button:hover { background: #366; }
+  .readout { color: #6cf; }
+  .warn    { color: #fc6; }
+  .err     { color: #f66; }
+  .ok      { color: #6f6; }
+  hr { border: 0; border-top: 1px solid #333; margin: 8px 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+</style>
+</head>
+<body>
+<!--
+  ME 493B MP4 Part A — Four-Bar Linkage Starter
+  What this does: animates a 2D four-bar linkage on one side of the MiniClaw
+    gripper, with user-adjustable link lengths and an optional mirrored other
+    side for visualizing total jaw closure. Computes finger tip position and
+    transmission angle and reports both live as you sweep the input angle.
+
+  Implementation note: this starter uses pure-JS analytical kinematics
+    (vector loop closure with the standard two-circle intersection) rather
+    than the Rapier.js physics engine. The spec note says "this is a
+    kinematic visualization, not a dynamic simulation" — analytical
+    kinematics is honest about that, has zero dependencies, and runs by
+    double-click without a local web server. If you want to use Rapier.js
+    or a different tool for your Section 5 evidence, that's accepted; note
+    the substitution in your trust ledger.
+
+  What to change for your MiniClaw: edit the inputs in the right-hand
+    "Geometry" panel. Save your final geometry by writing it into your
+    notebook's Section 1 design summary; the values shown here are just
+    starting numbers from the BigClaw reference.
+
+  How to run: double-click this file or open it in any modern browser.
+  How to capture results: see notebook Section 5 instructions — usually a
+    screen recording or a sequence of stills covering the full input range.
+-->
+<h1>Four-bar linkage — one side of the MiniClaw gripper</h1>
+<p>Edit the geometry on the right. Drag the input-angle slider or click <b>Sweep</b>
+   to animate the full input range. Toggle <b>Show mirrored other side</b> to see
+   what total jaw closure looks like when the other side mirrors yours.</p>
+
+<div class="row">
+  <canvas id="cv" width="720" height="520"></canvas>
+
+  <div class="panel">
+    <fieldset>
+      <legend>Geometry (mm)</legend>
+      <div class="grid2">
+        <div><label>L1 ground</label><input id="L1" type="number" step="0.5" value="12"/></div>
+        <div><label>L2 input</label><input id="L2" type="number" step="0.5" value="25"/></div>
+        <div><label>L3 coupler</label><input id="L3" type="number" step="0.5" value="12"/></div>
+        <div><label>L4 output</label><input id="L4" type="number" step="0.5" value="25"/></div>
+      </div>
+      <hr/>
+      <div class="grid2">
+        <div><label>Input pivot X (gear offset)</label><input id="O2X" type="number" step="0.5" value="8"/></div>
+        <div><label>Input pivot Y</label><input id="O2Y" type="number" step="0.5" value="0"/></div>
+      </div>
+      <div class="grid2">
+        <div><label>Output pivot X</label><input id="OX" type="number" step="0.5" value="8"/></div>
+        <div><label>Output pivot Y</label><input id="OY" type="number" step="0.5" value="12"/></div>
+      </div>
+      <div class="grid2">
+        <div><label>Tip extension</label><input id="TIP" type="number" step="0.5" value="35"/></div>
+        <div><label>Mirror axis X</label><input id="MX" type="number" step="0.5" value="0"/></div>
+      </div>
+      <hr/>
+      <div class="grid2">
+        <div><label>θ<sub>in</sub> min (°)</label><input id="TMIN" type="number" step="1" value="0"/></div>
+        <div><label>θ<sub>in</sub> max (°)</label><input id="TMAX" type="number" step="1" value="50"/></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Drive</legend>
+      <label>θ<sub>in</sub>: <span id="thR" class="readout">0°</span></label>
+      <input id="th" type="range" min="-180" max="180" step="1" value="0"/>
+      <div style="margin-top:6px">
+        <button id="play">Sweep</button>
+        <button id="reset">Reset</button>
+        <label style="display:inline-block; margin-left:8px"><input id="mirror" type="checkbox"/> Show mirrored other side</label>
+      </div>
+      <div style="margin-top:6px"><label><input id="trail" type="checkbox" checked/> Show finger tip trail</label></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Readout</legend>
+      <div>Finger tip:        <span class="readout" id="tipR">—</span></div>
+      <div>Disp. from closed: <span class="readout" id="dispR">—</span> mm</div>
+      <div>Implied jaw open:  <span class="readout" id="jawR">—</span> mm <span style="color:#888">(2 × disp.)</span></div>
+      <div>Transmission ang.: <span class="readout" id="muR">—</span></div>
+      <div>Assembly:          <span id="asmR">—</span></div>
+      <hr/>
+      <div>Min disp. (sweep): <span class="readout" id="dMinR">—</span> mm</div>
+      <div>Max disp. (sweep): <span class="readout" id="dMaxR">—</span> mm</div>
+      <div>μ band (sweep):    <span class="readout" id="muBandR">—</span></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Notes</legend>
+      <div>The reference position is θ<sub>in</sub> = θ<sub>min</sub>; displacement is
+           measured from the finger tip there. For the defaults,
+           θ<sub>min</sub>=0° is the <b>max-open</b> state and θ<sub>max</sub>=50° is
+           closed — displacement grows as the gripper closes.</div>
+      <div style="margin-top:6px"><b>Why O₂ is offset from the mirror axis.</b>
+           Your side's input pivot O₂ is the gear pivot for the gear pair that
+           synchronizes both sides. Each gear has its own center; the two gears
+           mesh at the gripper centerline (the mirror axis). So O₂'s X coordinate
+           = half the gear pair center distance. Default O₂=(8, 0) with mirror
+           at x=0 → 16 mm gear pair center distance, each gear roughly 8 mm
+           radius. You'll design the actual gear pair in Part B; for now just
+           pick an offset that leaves space for a printable gear.</div>
+      <div style="margin-top:6px">The defaults use a <b>parallelogram four-bar</b>
+           (L1=L3, L2=L4) matching the BigClaw's <b>parallel-gripping</b> mechanism.
+           O₂=(8,0) and O₄=(8,12) give a vertical ground link (φ=90°), so the
+           coupler stays vertical at every θ — the finger translates without
+           rotating. The dead-center is at θ=90°; the starter range 0°–50° stays
+           safely below this, giving transmission angles of 40°–90°.</div>
+      <div style="margin-top:6px">The <b>finger (green tip link) is rigidly attached
+           to the coupler</b>, not the output crank — it extends from joint B in the
+           coupler direction (= ground-link direction for a parallelogram). That is
+           what makes the jaw motion parallel.</div>
+      <div style="margin-top:6px;color:#888">Workable transmission angle band:
+           typically 40°–140°. Outside this band the four-bar transmits poorly.
+           The defaults sit right at the 40° floor at θ=50° — give yourself
+           more margin when designing your own.</div>
+      <div style="margin-top:6px;color:#888">Note for your notebook: the
+           <code>compute_finger_position()</code> function in Section 3 can stay in
+           a <i>local frame</i> with O₂ at the origin (matching Section 1's
+           convention). The starter visualization just adds an offset for
+           clarity — the kinematics math is identical.</div>
+    </fieldset>
+  </div>
+</div>
+
+<script>
+// ---------------- Four-bar kinematics ----------------
+// Convention:
+//   O2 = input ground pivot at (O2X, O2Y) — user-settable. Represents this
+//        side's gear pivot. Its X offset from the gripper centerline (the
+//        mirror axis) = half of the gear pair center distance.
+//   A  = moving end of input link L2:   A = O2 + L2 (cos θ2, sin θ2)
+//   O4 = output ground pivot at (OX, OY) — user-settable
+//   B  = joint between coupler L3 and output L4
+//   |O4 - A|  varies; |A - B| = L3; |O4 - B| = L4
+// Solve for B by intersecting two circles. Two assembly modes; the BRANCH
+// constant below picks one. For O4 upper-LEFT of O2 (incl. straight up — the
+// default vertical ground link), use BRANCH = -1 to get the parallelogram
+// assembly where B sits "above" A (matches the identity B = A + (O4-O2)).
+// For O4 upper-RIGHT, use BRANCH = +1. If your design renders inside-out,
+// flip the sign of BRANCH.
+const BRANCH = -1;
+
+function fourBar(theta2deg, L1, L2, L3, L4, O2X, O2Y, OX, OY) {
+  const t2 = theta2deg * Math.PI / 180;
+  const Ax = O2X + L2 * Math.cos(t2);
+  const Ay = O2Y + L2 * Math.sin(t2);
+  const dx = OX - Ax, dy = OY - Ay;
+  const d  = Math.hypot(dx, dy);
+  if (d > L3 + L4 + 1e-9 || d < Math.abs(L3 - L4) - 1e-9) {
+    return { ok: false, reason: d > L3 + L4 ? "links too short" : "links overlap", A: {x:Ax,y:Ay}, O2:{x:O2X,y:O2Y}, O4:{x:OX,y:OY} };
+  }
+  const a = (d*d + L3*L3 - L4*L4) / (2 * d);
+  const hsq = Math.max(0, L3*L3 - a*a);
+  const h = Math.sqrt(hsq);
+  // foot of perpendicular from B to line A->O4
+  const fx = Ax + a * dx / d;
+  const fy = Ay + a * dy / d;
+  // perpendicular direction (rotate (dx,dy)/d by +90°): (-dy, dx)/d
+  const px = -dy / d;
+  const py =  dx / d;
+  // pick branch — BRANCH = -1 gives the parallelogram-style assembly for
+  // the default vertical (and most upper-left) ground link
+  const Bx = fx + BRANCH * h * px;
+  const By = fy + BRANCH * h * py;
+  // transmission angle = angle between coupler L3 and output L4 at point B
+  // vectors: along coupler from B->A, along output from B->O4
+  const v1x = Ax - Bx, v1y = Ay - By;
+  const v2x = OX - Bx, v2y = OY - By;
+  const dot = (v1x * v2x + v1y * v2y) / (Math.hypot(v1x,v1y) * Math.hypot(v2x,v2y));
+  const muRad = Math.acos(Math.max(-1, Math.min(1, dot)));
+  return {
+    ok: true,
+    A:  { x: Ax, y: Ay },
+    B:  { x: Bx, y: By },
+    O2: { x: O2X, y: O2Y },
+    O4: { x: OX,  y: OY  },
+    theta2: theta2deg,
+    muDeg: muRad * 180 / Math.PI,
+  };
+}
+
+// Finger tip: rigidly attached to the COUPLER L3 (NOT the output link).
+// Extended by `tipExt` past joint B in the coupler direction (from A toward B).
+// For a parallelogram (L1=L3, L2=L4), the coupler stays parallel to the
+// ground link at every θ — so this direction is FIXED in the world frame
+// and the finger translates without rotating. That is what makes the jaw
+// motion parallel. If you attach the tip to the output link instead (the
+// old "+h" branch starter did), the finger swings in a big arc with the
+// output crank — wrong for a parallel gripper.
+function fingerTip(state, tipExt) {
+  if (!state.ok) return null;
+  const ux = state.B.x - state.A.x;       // coupler direction (A → B)
+  const uy = state.B.y - state.A.y;
+  const m  = Math.hypot(ux, uy) || 1e-9;
+  return {
+    x: state.B.x + tipExt * ux / m,
+    y: state.B.y + tipExt * uy / m,
+  };
+}
+
+// ---------------- Rendering ----------------
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+function viewport(state, tip, mirrorTipX) {
+  // Auto-fit so the linkage stays visible when the user changes geometry.
+  const pts = [];
+  if (state.ok) { pts.push(state.O2, state.A, state.B, state.O4); if (tip) pts.push(tip); }
+  if (mirrorTipX !== null && mirrorTipX !== undefined) {
+    // include mirrored points so view doesn't crop
+    for (const p of pts.slice()) pts.push({ x: 2 * mirrorTipX - p.x, y: p.y });
+  }
+  if (pts.length === 0) return { sx: 1, sy: 1, ox: cv.width/2, oy: cv.height/2 };
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const xmin = Math.min(...xs) - 30, xmax = Math.max(...xs) + 30;
+  const ymin = Math.min(...ys) - 30, ymax = Math.max(...ys) + 30;
+  const sx = cv.width  / (xmax - xmin || 1);
+  const sy = cv.height / (ymax - ymin || 1);
+  const s  = Math.min(sx, sy, 7);
+  return {
+    s,
+    ox: cv.width  / 2 - s * (xmin + xmax) / 2,
+    oy: cv.height / 2 + s * (ymin + ymax) / 2,
+  };
+}
+function w2s(p, view) {
+  return { x: view.ox + p.x * view.s, y: view.oy - p.y * view.s };
+}
+function drawLink(p1, p2, view, color, width = 4) {
+  const a = w2s(p1, view), b = w2s(p2, view);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+}
+function drawPivot(p, view, color = "#888", r = 5) {
+  const s = w2s(p, view);
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#222"; ctx.lineWidth = 1; ctx.stroke();
+}
+function drawLabel(p, view, text, color = "#aaa", dx = 6, dy = -6) {
+  const s = w2s(p, view);
+  ctx.fillStyle = color;
+  ctx.font = "11px ui-monospace";
+  ctx.fillText(text, s.x + dx, s.y + dy);
+}
+function drawTrail(trail, view, color) {
+  if (trail.length < 2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < trail.length; i++) {
+    const s = w2s(trail[i], view);
+    if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+  }
+  ctx.stroke();
+}
+
+// Mirror a point about vertical axis x = mx
+function mirrorPt(p, mx) { return { x: 2 * mx - p.x, y: p.y }; }
+
+// ---------------- State ----------------
+const $  = id => document.getElementById(id);
+const trail = [];
+const trailMirror = [];
+let sweeping = false;
+let sweepDir = 1;
+let dispMin = +Infinity, dispMax = -Infinity;
+let muMin   = +Infinity, muMax   = -Infinity;
+let closedTip = null;       // finger tip at θ_min (the "closed" reference)
+
+function readGeom() {
+  return {
+    L1:  parseFloat($("L1").value),
+    L2:  parseFloat($("L2").value),
+    L3:  parseFloat($("L3").value),
+    L4:  parseFloat($("L4").value),
+    O2X: parseFloat($("O2X").value),
+    O2Y: parseFloat($("O2Y").value),
+    OX:  parseFloat($("OX").value),
+    OY:  parseFloat($("OY").value),
+    TIP: parseFloat($("TIP").value),
+    MX:  parseFloat($("MX").value),
+    TMIN: parseFloat($("TMIN").value),
+    TMAX: parseFloat($("TMAX").value),
+    showMirror: $("mirror").checked,
+    showTrail:  $("trail").checked,
+  };
+}
+
+function recomputeClosedTip(g) {
+  // sample a fine grid and pick the tip at θ_min as our "closed" reference
+  const sClosed = fourBar(g.TMIN, g.L1, g.L2, g.L3, g.L4, g.O2X, g.O2Y, g.OX, g.OY);
+  closedTip = fingerTip(sClosed, g.TIP);
+  // also reset the sweep min/max trackers
+  dispMin = +Infinity; dispMax = -Infinity;
+  muMin   = +Infinity; muMax   = -Infinity;
+  trail.length = 0;
+  trailMirror.length = 0;
+}
+
+function update(g) {
+  const theta = parseFloat($("th").value);
+  $("thR").textContent = `${theta.toFixed(0)}°`;
+
+  const s = fourBar(theta, g.L1, g.L2, g.L3, g.L4, g.O2X, g.O2Y, g.OX, g.OY);
+  const tip = fingerTip(s, g.TIP);
+
+  // RENDER
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const view = viewport(s, tip, g.showMirror ? g.MX : null);
+
+  // axes
+  ctx.strokeStyle = "#1f2a2a";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, view.oy); ctx.lineTo(cv.width, view.oy);
+  ctx.moveTo(view.ox, 0); ctx.lineTo(view.ox, cv.height);
+  ctx.stroke();
+
+  // mirror axis line
+  if (g.showMirror) {
+    ctx.setLineDash([4, 6]);
+    ctx.strokeStyle = "#446";
+    const mxScreen = view.ox + g.MX * view.s;
+    ctx.beginPath(); ctx.moveTo(mxScreen, 0); ctx.lineTo(mxScreen, cv.height); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  if (s.ok) {
+    // trails
+    if (tip) trail.push({ x: tip.x, y: tip.y });
+    if (trail.length > 1500) trail.shift();
+    if (g.showMirror && tip) {
+      const tm = mirrorPt(tip, g.MX);
+      trailMirror.push(tm);
+      if (trailMirror.length > 1500) trailMirror.shift();
+    }
+    if (g.showTrail) {
+      drawTrail(trail, view, "rgba(102,204,255,0.45)");
+      if (g.showMirror) drawTrail(trailMirror, view, "rgba(255,153,153,0.45)");
+    }
+
+    // mirrored side first (so it draws under)
+    if (g.showMirror) {
+      const O2m = mirrorPt(s.O2, g.MX);
+      const Am  = mirrorPt(s.A,  g.MX);
+      const Bm  = mirrorPt(s.B,  g.MX);
+      const O4m = mirrorPt(s.O4, g.MX);
+      drawLink(O2m, O4m, view, "#544", 3);     // ground
+      drawLink(O2m, Am,  view, "#fa6", 4);     // input
+      drawLink(Am,  Bm,  view, "#fc6", 4);     // coupler
+      drawLink(O4m, Bm,  view, "#f99", 4);     // output
+      if (tip) {
+        const tipM = mirrorPt(tip, g.MX);
+        drawLink(Bm, tipM, view, "#fbb", 4);
+        drawPivot(tipM, view, "#fbb", 4);
+      }
+      drawPivot(O2m, view, "#aaa", 6);
+      drawPivot(O4m, view, "#aaa", 6);
+      drawPivot(Am, view, "#fa6", 4);
+      drawPivot(Bm, view, "#f99", 4);
+    }
+
+    // primary side
+    drawLink(s.O2, s.O4, view, "#666", 3);     // ground
+    drawLink(s.O2, s.A,  view, "#6cf", 5);     // input
+    drawLink(s.A,  s.B,  view, "#fc6", 5);     // coupler
+    drawLink(s.O4, s.B,  view, "#9f9", 5);     // output
+    if (tip) {
+      drawLink(s.B, tip, view, "#bfb", 5);     // tip extension
+      drawPivot(tip, view, "#bfb", 5);
+    }
+    drawPivot(s.O2, view, "#fff", 7);
+    drawPivot(s.O4, view, "#fff", 7);
+    drawPivot(s.A,  view, "#6cf", 5);
+    drawPivot(s.B,  view, "#9f9", 5);
+
+    drawLabel(s.O2, view, "O₂ (input ground / gear pivot)", "#bbb", 8, -8);
+    drawLabel(s.O4, view, "O₄ (output ground / finger pivot)", "#bbb", 8, -8);
+    drawLabel(s.A,  view, "A",  "#6cf");
+    drawLabel(s.B,  view, "B",  "#9f9");
+    if (tip) drawLabel(tip, view, "tip", "#bfb");
+
+    // readouts
+    let disp = "—";
+    if (closedTip && tip) {
+      const dx = tip.x - closedTip.x, dy = tip.y - closedTip.y;
+      const m = Math.hypot(dx, dy);
+      disp = m;
+      dispMin = Math.min(dispMin, m);
+      dispMax = Math.max(dispMax, m);
+    }
+    muMin = Math.min(muMin, s.muDeg);
+    muMax = Math.max(muMax, s.muDeg);
+
+    $("tipR").innerHTML = tip ? `(${tip.x.toFixed(2)}, ${tip.y.toFixed(2)}) mm` : "—";
+    $("dispR").innerHTML = (typeof disp === "number") ? disp.toFixed(2) : "—";
+    $("jawR").innerHTML  = (typeof disp === "number") ? (2 * disp).toFixed(2) : "—";
+    const muClass = (s.muDeg < 40 || s.muDeg > 140) ? "warn" : "ok";
+    $("muR").innerHTML = `<span class="${muClass}">${s.muDeg.toFixed(1)}°</span>`;
+    $("asmR").innerHTML = `<span class="ok">OK</span>`;
+    $("dMinR").innerHTML = isFinite(dispMin) ? dispMin.toFixed(2) : "—";
+    $("dMaxR").innerHTML = isFinite(dispMax) ? dispMax.toFixed(2) : "—";
+    $("muBandR").innerHTML = isFinite(muMin)
+      ? `${muMin.toFixed(1)}° &mdash; ${muMax.toFixed(1)}°`
+      : "—";
+  } else {
+    drawLink(s.O2, s.A, view, "#444", 4);
+    drawPivot(s.O2, view, "#888", 6);
+    drawPivot(s.A, view, "#fc6", 4);
+    drawPivot(s.O4, view, "#888", 6);
+    $("tipR").innerHTML = "—";
+    $("dispR").innerHTML = "—";
+    $("jawR").innerHTML  = "—";
+    $("muR").innerHTML   = "—";
+    $("asmR").innerHTML  = `<span class="err">break (${s.reason})</span>`;
+  }
+}
+
+// ---------------- UI ----------------
+let lastGeomStr = "";
+function tick() {
+  const g = readGeom();
+  // Recompute the "closed" tip whenever geometry changes
+  const sig = JSON.stringify([g.L1, g.L2, g.L3, g.L4, g.O2X, g.O2Y, g.OX, g.OY, g.TIP, g.TMIN]);
+  if (sig !== lastGeomStr) {
+    lastGeomStr = sig;
+    recomputeClosedTip(g);
+  }
+  if (sweeping) {
+    let theta = parseFloat($("th").value);
+    theta += sweepDir * 1.0;
+    if (theta > g.TMAX) { theta = g.TMAX; sweepDir = -1; }
+    if (theta < g.TMIN) { theta = g.TMIN; sweepDir =  1; }
+    $("th").value = theta;
+  }
+  update(g);
+  requestAnimationFrame(tick);
+}
+
+document.querySelectorAll("input").forEach(el => {
+  el.addEventListener("input", () => { /* tick handles refresh */ });
+});
+$("play").addEventListener("click",  () => { sweeping = !sweeping; $("play").textContent = sweeping ? "Pause" : "Sweep"; });
+$("reset").addEventListener("click", () => { trail.length = 0; trailMirror.length = 0; dispMin = +Infinity; dispMax = -Infinity; muMin = +Infinity; muMax = -Infinity; });
+$("th").min = $("TMIN").value;
+$("th").max = $("TMAX").value;
+$("TMIN").addEventListener("input", () => { $("th").min = $("TMIN").value; });
+$("TMAX").addEventListener("input", () => { $("th").max = $("TMAX").value; });
+
+tick();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "miniclaw-knowledge": {
+      "command": "python",
+      "args": [
+        "C:/ABSOLUTE/PATH/TO/REPO/MP3/Part B/mcp_server/server.py"
+      ]
+    }
+  }
+}

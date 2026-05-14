@@ -1,0 +1,12 @@
+numpy
+pandas
+matplotlib
+scikit-learn
+scikit-fem
+torch
+jupyter
+tiktoken
+chromadb
+openai
+sentence-transformers
+python-dotenv

@@ -1,0 +1,15 @@
+{
+  "// Where this lives": [
+    "Cursor reads MCP servers from `~/.cursor/mcp.json` (global) or",
+    "`<workspace>/.cursor/mcp.json` (per-project). Use the workspace file",
+    "for course work so the path is portable across machines."
+  ],
+  "mcpServers": {
+    "miniclaw-knowledge": {
+      "command": "python",
+      "args": [
+        "./MP3/Part B/mcp_server/server.py"
+      ]
+    }
+  }
+}

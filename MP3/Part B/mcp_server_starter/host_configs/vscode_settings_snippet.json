@@ -1,0 +1,19 @@
+{
+  "// Where this lives": [
+    "VS Code reads MCP server definitions from `.vscode/mcp.json` in the",
+    "workspace, or from your user `mcp.json` in the user-config folder.",
+    "Run the command 'MCP: Add Server' in the Command Palette to set this",
+    "up interactively. The snippet below shows what gets written.",
+    "Verify the exact file path/format in the current VS Code release —",
+    "Copilot agent-mode MCP support is moving fast in 2026."
+  ],
+  "servers": {
+    "miniclaw-knowledge": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/MP3/Part B/mcp_server/server.py"
+      ]
+    }
+  }
+}
