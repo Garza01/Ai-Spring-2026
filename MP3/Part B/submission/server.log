@@ -1,0 +1,12 @@
+2026-05-15 18:49:46,695 | INFO | TOOL_CALL | query_miniclaw_rag | question='For a MiniClaw module 1.0 PLA pinion with 12 teeth, 4 mm face width, and 0.08 mm backlash, what ACME gear-design issues should I flag?' n_results=3
+2026-05-15 18:49:46,707 | INFO | TOOL_RESULT | query_miniclaw_rag | chunks=3 top=ACME-ENG-001 summary='3 chunks retrieved. Top match: ACME-ENG-001 — Gear Design Guidelines — ACME Internal Standard (score 0.6139).'
+2026-05-15 18:49:46,709 | INFO | TOOL_CALL | query_miniclaw_rag | question='The MiniClaw jaw housing copied BigClaw aluminum walls at 1.0 mm. What wall thickness should PLA use and what document supports that?' n_results=3
+2026-05-15 18:49:46,725 | INFO | TOOL_RESULT | query_miniclaw_rag | chunks=3 top=ACME-VND-002 summary='3 chunks retrieved. Top match: ACME-VND-002 — Hiwonder BigClaw Teardown Notes (score 0.575).'
+2026-05-15 18:49:46,727 | INFO | TOOL_CALL | query_miniclaw_rag | question='Can a 3.02 mm printed bore be a reliable light press fit on a 3.00 mm jaw pivot pin across the RobotExpo production run?' n_results=3
+2026-05-15 18:49:46,735 | INFO | TOOL_RESULT | query_miniclaw_rag | chunks=3 top=ACME-MFG-001 summary='3 chunks retrieved. Top match: ACME-MFG-001 — Print Shop Capabilities & Standards (score 0.5333).'
+2026-05-15 18:52:16,230 | INFO | TOOL_CALL | query_miniclaw_rag | question='What does ACME-ENG-001 say about module 1.0 MiniClaw gear tooth count?' n_results=1
+2026-05-15 18:52:16,240 | INFO | TOOL_RESULT | query_miniclaw_rag | chunks=1 top=ACME-ENG-001 summary='1 chunks retrieved. Top match: ACME-ENG-001 — Gear Design Guidelines — ACME Internal Standard (score 0.6417).'
+2026-05-15 18:58:23,806 | INFO | TOOL_CALL | query_miniclaw_rag | question='BigClaw PLA wall thickness MiniClaw' n_results=1
+2026-05-15 18:58:23,819 | INFO | TOOL_RESULT | query_miniclaw_rag | chunks=1 top=ACME-VND-002 summary='1 chunks retrieved. Top match: ACME-VND-002 — Hiwonder BigClaw Teardown Notes (score 0.99).'
+2026-05-15 19:22:36,057 | INFO | TOOL_CALL | query_miniclaw_rag | question='MiniClaw BigClaw wall thickness PLA' n_results=1
+2026-05-15 19:22:36,062 | INFO | TOOL_RESULT | query_miniclaw_rag | chunks=1 top=ACME-VND-002 summary='1 chunks retrieved. Top match: ACME-VND-002 — Hiwonder BigClaw Teardown Notes (score 0.99).'
